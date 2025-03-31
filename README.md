@@ -26,8 +26,9 @@ A web-based tool for transport companies to submit route rates across Saudi Arab
 
 ## 📬 Submission
 Email generated CSV files to:  
-📧 logistics@example.com  
-📅 Deadline: 30-Nov-2023
+📧 najam.mir000@gmail.com  
+📧 Sales@goldenitc.sa
+
 
 ## 🛠️ Development
 ```bash
