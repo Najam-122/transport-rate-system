@@ -11,7 +11,7 @@ A web-based tool for transport companies to submit route rates across Saudi Arab
 - Responsive design (works on mobile/desktop)
 
 ## 🚀 Quick Start
-1. Open [index.html](index.html) in any browser
+1. Open [index.html](transport_rates.html) in any browser
 2. Enter company name
 3. Fill rates for each route
 4. Click "Export CSV" to download
