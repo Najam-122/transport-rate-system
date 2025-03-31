@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transport Rate Management</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 15px; 
+            font-size: 14px; 
+        }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 15px;
+            font-size: 13px;
+        }
+        th, td { 
+            border: 1px solid black; 
+            padding: 8px; 
+            text-align: center; 
+        }
+        th { 
+            background: #2c3e50; 
+            color: white; 
+            font-weight: bold;
+        }
+        input, select { 
+            padding: 5px; 
+            width: 100%;
+            box-sizing: border-box;
+            font-size: 13px;
+        }
+        button { 
+            padding: 8px 15px; 
+            margin-top: 10px; 
+            background: #28a745; 
+            color: white; 
+            border: none; 
+            cursor: pointer; 
+            font-size: 14px;
+            border-radius: 4px;
+        }
+        button:hover { background: #218838; }
+        .highlight { background-color: #ffeb3b; }
+        #searchBar { 
+            margin-bottom: 10px; 
+            padding: 8px; 
+            width: 100%; 
+            box-sizing: border-box;
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+        .controls label {
+            white-space: nowrap;
+        }
+        .controls input {
+            width: auto;
+            min-width: 200px;
+        }
+        
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            table { font-size: 12px; }
+            th, td { padding: 5px; }
+            .controls {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+            .controls input {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Transport Rate Management System</h2>
+
+    <div class="controls">
+        <label>Company Name: <input type="text" id="company"></label>
+        <button onclick="exportCSV()">Export CSV</button>
+    </div>
+
+    <h3>Enter Rates for Routes</h3>
+    
+    <!-- Search Bar -->
+    <input type="text" id="searchBar" placeholder="Search city, route, or rate..." onkeyup="filterTable()">
+
+    <div style="overflow-x: auto;">
+        <table id="rateTable">
+            <thead>
+                <tr>
+                    <th>Select</th>
+                    <th>Route</th>
+                    <th>Lowbed</th>
+                    <th>Lowbed Rate</th>
+                    <th>Flat Truck</th>
+                    <th>Flat Truck Rate</th>
+                    <th>Lorry</th>
+                    <th>Lorry Rate</th>
+                    <th>Dayna</th>
+                    <th>Dayna Rate</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script>
+        const dbName = "TransportDB";
+        const storeName = "Rates";
+        let db;
+
+        const cities = ["Jeddah", "Riyadh", "Dammam", "Makkah", "Madinah", "Yanbu", "Khobar", "Abha", "Najran", "Tabuk", "Rabigh", "Neom"];
+        
+        let routes = [];
+        cities.forEach((fromCity) => {
+            cities.forEach((toCity) => {
+                if (fromCity !== toCity) {
+                    routes.push({ 
+                        from: fromCity, 
+                        to: toCity, 
+                        lowbed: "", 
+                        lowbedRate: "", 
+                        flat: "", 
+                        flatRate: "", 
+                        lorry: "", 
+                        lorryRate: "", 
+                        dayna: "", 
+                        daynaRate: "", 
+                        highlighted: false 
+                    });
+                }
+            });
+            routes.push({ 
+                from: fromCity, 
+                to: "Within " + fromCity, 
+                lowbed: "", 
+                lowbedRate: "", 
+                flat: "", 
+                flatRate: "", 
+                lorry: "", 
+                lorryRate: "", 
+                dayna: "", 
+                daynaRate: "", 
+                highlighted: false 
+            });
+        });
+
+        const request = indexedDB.open(dbName, 1);
+        request.onupgradeneeded = function (event) {
+            let db = event.target.result;
+            if (!db.objectStoreNames.contains(storeName)) {
+                db.createObjectStore(storeName, { keyPath: "id", autoIncrement: true });
+            }
+        };
+
+        request.onsuccess = function (event) {
+            db = event.target.result;
+            displayRates();
+        };
+
+        function displayRates() {
+            let tbody = document.querySelector("#rateTable tbody");
+            tbody.innerHTML = "";
+            routes.forEach((route, index) => {
+                let row = `<tr class="${route.highlighted ? 'highlight' : ''}">
+                    <td><input type="checkbox" onclick="toggleHighlight(${index})"></td>
+                    <td>${route.from} → ${route.to}</td>
+                    <td><select id="lowbed-${index}" onchange="saveRate(${index})">
+                        <option value="">Select</option>
+                        <option value="Hydraulic Lowbed" ${route.lowbed === "Hydraulic Lowbed" ? "selected" : ""}>Hydraulic Lowbed</option>
+                        <option value="Lolo Bed" ${route.lowbed === "Lolo Bed" ? "selected" : ""}>Lolo Bed</option>
+                        <option value="Extendable" ${route.lowbed === "Extendable" ? "selected" : ""}>Extendable</option>
+                        <option value="Flat Container Lowbed" ${route.lowbed === "Flat Container Lowbed" ? "selected" : ""}>Flat Container Lowbed</option>
+                    </select></td>
+                    <td><input type="number" id="lowbedRate-${index}" onchange="saveRate(${index})" placeholder="Enter Rate" value="${route.lowbedRate || ''}"></td>
+                    <td><select id="flat-${index}" onchange="saveRate(${index})">
+                        <option value="">Select</option>
+                        <option value="40 ft" ${route.flat === "40 ft" ? "selected" : ""}>40 ft</option>
+                        <option value="20 ft" ${route.flat === "20 ft" ? "selected" : ""}>20 ft</option>
+                        <option value="Open Top" ${route.flat === "Open Top" ? "selected" : ""}>Open Top</option>
+                    </select></td>
+                    <td><input type="number" id="flatRate-${index}" onchange="saveRate(${index})" placeholder="Enter Rate" value="${route.flatRate || ''}"></td>
+                    <td><select id="lorry-${index}" onchange="saveRate(${index})">
+                        <option value="">Select</option>
+                        <option value="Standard Lorry" ${route.lorry === "Standard Lorry" ? "selected" : ""}>Standard Lorry</option>
+                        <option value="Heavy Duty Lorry" ${route.lorry === "Heavy Duty Lorry" ? "selected" : ""}>Heavy Duty Lorry</option>
+                    </select></td>
+                    <td><input type="number" id="lorryRate-${index}" onchange="saveRate(${index})" placeholder="Enter Rate" value="${route.lorryRate || ''}"></td>
+                    <td><select id="dayna-${index}" onchange="saveRate(${index})">
+                        <option value="">Select</option>
+                        <option value="Small Dayna" ${route.dayna === "Small Dayna" ? "selected" : ""}>Small Dayna</option>
+                        <option value="Medium Dayna" ${route.dayna === "Medium Dayna" ? "selected" : ""}>Medium Dayna</option>
+                    </select></td>
+                    <td><input type="number" id="daynaRate-${index}" onchange="saveRate(${index})" placeholder="Enter Rate" value="${route.daynaRate || ''}"></td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+        }
+
+        function saveRate(index) {
+            routes[index].lowbed = document.getElementById(`lowbed-${index}`).value;
+            routes[index].lowbedRate = document.getElementById(`lowbedRate-${index}`).value;
+            routes[index].flat = document.getElementById(`flat-${index}`).value;
+            routes[index].flatRate = document.getElementById(`flatRate-${index}`).value;
+            routes[index].lorry = document.getElementById(`lorry-${index}`).value;
+            routes[index].lorryRate = document.getElementById(`lorryRate-${index}`).value;
+            routes[index].dayna = document.getElementById(`dayna-${index}`).value;
+            routes[index].daynaRate = document.getElementById(`daynaRate-${index}`).value;
+            storeRates();
+        }
+
+        function toggleHighlight(index) {
+            routes[index].highlighted = !routes[index].highlighted;
+            displayRates();
+        }
+
+        function storeRates() {
+            let transaction = db.transaction([storeName], "readwrite");
+            let store = transaction.objectStore(storeName);
+            store.clear();
+            routes.forEach(route => store.add(route));
+        }
+
+        function filterTable() {
+            let input = document.getElementById("searchBar").value.toLowerCase();
+            let rows = document.querySelectorAll("#rateTable tbody tr");
+            rows.forEach(row => {
+                let cells = row.querySelectorAll("td");
+                let found = false;
+                cells.forEach(cell => {
+                    if (cell.textContent.toLowerCase().includes(input)) {
+                        found = true;
+                    }
+                });
+                row.style.display = found ? "" : "none";
+            });
+        }
+
+        function exportCSV() {
+            let company = document.getElementById("company").value || "Unknown";
+            let csvContent = "SEP=,\n"; // Helps Excel with formatting
+            
+            // Add header with style information for Excel
+            csvContent += '"Company","Route","Lowbed","Lowbed Rate","Flat Truck","Flat Truck Rate","Lorry","Lorry Rate","Dayna","Dayna Rate"\n';
+            
+            routes.forEach(route => {
+                csvContent += `"${company}","${route.from} → ${route.to}","${route.lowbed}","${route.lowbedRate}","${route.flat}","${route.flatRate}","${route.lorry}","${route.lorryRate}","${route.dayna}","${route.daynaRate}"\n`;
+            });
+            
+            // Create a Blob with UTF-8 BOM for Excel compatibility
+            const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+            
+            // Create download link
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", `${company}_TransportRates.csv`);
+            link.style.visibility = "hidden";
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
